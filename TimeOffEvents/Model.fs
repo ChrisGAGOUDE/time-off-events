@@ -25,18 +25,23 @@ type TimeOffRequest = {
 
 type Command =
     | RequestTimeOff of TimeOffRequest
+    | RequestCancellation of TimeOffRequest
+    | CancellationAccepted of TimeOffRequest
     | ValidateRequest of UserId * Guid with
     member this.UserId =
         match this with
         | RequestTimeOff request -> request.UserId
+        | RequestCancellation request -> request.UserId
         | ValidateRequest (userId, _) -> userId
 
 type RequestEvent =
     | RequestCreated of TimeOffRequest
+    | RequestCancelled of TimeOffRequest
     | RequestValidated of TimeOffRequest with
     member this.Request =
         match this with
         | RequestCreated request -> request
+        | RequestCancelled request -> request
         | RequestValidated request -> request
 
 module Logic =
@@ -44,16 +49,19 @@ module Logic =
     type RequestState =
         | NotCreated
         | PendingValidation of TimeOffRequest
+        | RequestCancelled of TimeOffRequest
         | Validated of TimeOffRequest with
         member this.Request =
             match this with
             | NotCreated -> invalidOp "Not created"
             | PendingValidation request
+            | RequestCancelled request
             | Validated request -> request
         member this.IsActive =
             match this with
             | NotCreated -> false
             | PendingValidation _
+            | RequestCancelled _
             | Validated _ -> true
 
     let evolve _ event =
