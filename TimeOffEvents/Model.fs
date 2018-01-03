@@ -25,23 +25,27 @@ type TimeOffRequest = {
 
 type Command =
     | RequestTimeOff of TimeOffRequest
-    | RequestCancellation of TimeOffRequest
-    | CancellationAccepted of TimeOffRequest
+    | RequestCancelled of TimeOffRequest
+    | RequestCancelledAccepted of TimeOffRequest
     | ValidateRequest of UserId * Guid with
     member this.UserId =
         match this with
         | RequestTimeOff request -> request.UserId
-        | RequestCancellation request -> request.UserId
+        | RequestCancelled request -> request.UserId
         | ValidateRequest (userId, _) -> userId
 
 type RequestEvent =
     | RequestCreated of TimeOffRequest
-    | RequestCancelled of TimeOffRequest
+    | RequestCancellation of TimeOffRequest
+    | RequestCancelledRefused of TimeOffRequest
+    | RequestCancelledAccepted of TimeOffRequest
     | RequestValidated of TimeOffRequest with
     member this.Request =
         match this with
         | RequestCreated request -> request
-        | RequestCancelled request -> request
+        | RequestCancellation request -> request
+        | RequestCancelledRefused request -> request
+        | RequestCancelledAccepted request -> request
         | RequestValidated request -> request
 
 module Logic =
@@ -50,24 +54,34 @@ module Logic =
         | NotCreated
         | PendingValidation of TimeOffRequest
         | RequestCancelled of TimeOffRequest
+        | CancelRefused of TimeOffRequest
+        | CancelledByEmployee of TimeOffRequest
+        | CancelledByManager of TimeOffRequest
+        | Refused of TimeOffRequest
         | Validated of TimeOffRequest with
         member this.Request =
             match this with
             | NotCreated -> invalidOp "Not created"
             | PendingValidation request
             | RequestCancelled request
+            | CancelRefused request
+            | CancelledByEmployee request
+            | CancelledByManager request
+            | Refused request
             | Validated request -> request
         member this.IsActive =
             match this with
             | NotCreated -> false
-            | PendingValidation _
-            | RequestCancelled _
+            | PendingValidation _ -> true
+            | RequestCancelled _ -> true
+            | CancelRefused _ -> true
             | Validated _ -> true
 
     let evolve _ event =
         match event with
         | RequestCreated request -> PendingValidation request
         | RequestValidated request -> Validated request
+        | RequestCancellation request -> RequestCancelled request
 
     let getRequestState events =
         events |> Seq.fold evolve NotCreated
