@@ -80,12 +80,13 @@ module Logic =
             | Validated request -> request
         member this.IsActive =
             match this with
-            | NotCreated -> false
+            | NotCreated _ -> false
             | PendingValidation _ -> true
             | ToCancelTimeoffRequested _ -> true
             | RequestToCancelTimeoffRefused _ -> true
             | Validated _ -> true
 
+// Function signature =>  val evolve : 'a -> event:RequestEvent -> RequestState
     let evolve _ event =
         match event with
         | RequestCreated request -> PendingValidation request
@@ -96,10 +97,11 @@ module Logic =
         | RequestRefused request -> Refused request
         | RequestValidated request -> Validated request
 
-
+// Function signature =>    val getRequestState : events:seq<RequestEvent> -> RequestState
     let getRequestState events =
         events |> Seq.fold evolve NotCreated
 
+// Function signature =>    val getAllRequests : events:seq<RequestEvent> -> Map<Guid,RequestState>
     let getAllRequests events =
         let folder requests (event: RequestEvent) =
             let state = defaultArg (Map.tryFind event.Request.RequestId requests) NotCreated
@@ -108,9 +110,14 @@ module Logic =
 
         events |> Seq.fold folder Map.empty
 
+// Function signature =>    val overlapWithAnyRequest : 
+//                                    previousRequests:seq<TimeOffRequest> -> request:'a -> bool
     let overlapWithAnyRequest (previousRequests: TimeOffRequest seq) request =
         false //TODO
 
+// Function signature =>    val createRequest :
+//                                    previousRequests:seq<TimeOffRequest> ->
+//                                          request:TimeOffRequest -> Result<RequestEvent list,string>
     let createRequest previousRequests request =
         if overlapWithAnyRequest previousRequests request then
             Error "Overlapping request"
@@ -119,6 +126,8 @@ module Logic =
         else
             Ok [RequestCreated request]
 
+// Function signature =>    val validateRequest :
+//                                    requestState:RequestState -> Result<RequestEvent list,string>
     let validateRequest requestState =
         match requestState with
         | PendingValidation request ->
@@ -126,6 +135,9 @@ module Logic =
         | _ ->
             Error "Request cannot be validated"
 
+// Function signature =>    val handleCommand :
+//                                    store:IStore<UserId,RequestEvent> ->
+//                                          command:Command -> Result<RequestEvent list,string>
     let handleCommand (store: IStore<UserId, RequestEvent>) (command: Command) =
         let userId = command.UserId
         let stream = store.GetStream userId
