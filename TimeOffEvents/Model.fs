@@ -126,6 +126,25 @@ module Logic =
         else
             Ok [RequestCreated request]
 
+    let refuseRequest previousRequests request =
+        if overlapWithAnyRequest previousRequests request then
+            Error "Overlapping request"
+        elif request.Start.Date <= DateTime.Today then
+            Error "The request starts in the past"
+        else
+            Ok [RequestRefused request]
+
+// Function signature =>    val requestCancellation :
+//                                    previousRequests:seq<TimeOffRequest> ->
+//                                          request:TimeOffRequest -> Result<RequestEvent list,string>
+    let requestCancellation previousRequests request =
+        if overlapWithAnyRequest previousRequests request then
+            Error "Overlapping request"
+        elif request.Start.Date > DateTime.Today then
+            Error "The request starts in the future"
+        else
+            Ok [RequestCancellation request]
+
 // Function signature =>    val validateRequest :
 //                                    requestState:RequestState -> Result<RequestEvent list,string>
     let validateRequest requestState =
@@ -135,6 +154,13 @@ module Logic =
         | _ ->
             Error "Request cannot be validated"
 
+    let cancelActiveRequests requestState =
+        match requestState with
+        | PendingValidation request -> Ok [RequestRefused request]
+        | ToCancelTimeoffRequested  request -> Ok [RequestRefused request]
+        | RequestToCancelTimeoffRefused request -> Ok [RequestRefused request]
+        | Validated request -> Ok [RequestRefused request]
+        |  _ -> Error "Request cannot be cancelled"
 // Function signature =>    val handleCommand :
 //                                    store:IStore<UserId,RequestEvent> ->
 //                                          command:Command -> Result<RequestEvent list,string>
