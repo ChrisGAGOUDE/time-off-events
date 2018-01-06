@@ -45,8 +45,60 @@ let validationTests =
     }
   ]
 
+let cancelRequestTests =
+    testList "Cancellation tests" [
+        test "A request cancellation" {
+            let request = {
+                UserId = 1
+                RequestId = Guid.Empty
+                Start = { Date = DateTime(2017, 12, 30); HalfDay = AM }
+                End = { Date = DateTime(2017, 12, 30); HalfDay = PM } 
+            }
+
+          Given [ RequestCreated request ]
+          |> When (ValidateRequest (1, Guid.Empty))
+          |> Then (Ok [RequestCancelled request]) "The request has been cancelled by employee"
+        }
+  ]
+
+
+let requestCancellationTests =
+    testList "Request Cancellation tests" [
+        test "A request to cancel a timeoff" {
+            let request = {
+                UserId = 1
+                RequestId = Guid.Empty
+                Start = { Date = DateTime(2017, 12, 30); HalfDay = AM }
+                End = { Date = DateTime(2017, 12, 30); HalfDay = PM } 
+            }
+
+          Given [ RequestCreated request ]
+          |> When (RequestToCancelTimeoff request)
+          |> Then (Ok [RequestCancellation request]) "The request is requested to be cancelled"
+        }
+  ]
+
+let cancelActiveRequests =
+    testList "Active timeoff cancellation tests" [
+        test "Active timeoff request cancellation" {
+            let request = {
+                UserId = 1
+                RequestId = Guid.Empty
+                Start = { Date = DateTime(2017, 12, 30); HalfDay = AM }
+                End = { Date = DateTime(2017, 12, 30); HalfDay = PM } 
+            }
+    
+          Given [ RequestCreated request ]
+          |> When (CancelRequest (1, Guid.Empty))
+          |> Then (Ok [RequestRefused request]) "The actives timeoff requests have been cancelled by manager"
+        }
+    ]
+
 let tests =
   testList "All tests" [
     creationTests
     validationTests
+    cancelRequestTests
+    requestCancellationTests
+    cancelActiveRequests
   ]

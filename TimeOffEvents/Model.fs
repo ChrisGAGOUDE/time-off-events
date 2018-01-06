@@ -46,7 +46,7 @@ type RequestEvent =
     | RequestCancellation of TimeOffRequest                     // A request to cancel a validated timeoff has been made
     | RequestCancellationRefused of TimeOffRequest              // A request to cancel a validated timeoff has been refused
     | RequestCancellationAccepted of TimeOffRequest             // A request to cancel a validated timeoff has been accepted
-    | RequestCancelled of TimeOffRequest                // A validated request has been cancelled
+    | RequestCancelled of TimeOffRequest                        // A request has been cancelled
     | RequestRefused of TimeOffRequest                          // A timeoff request has been refuse
     | RequestValidated of TimeOffRequest with                   // A timeoff request has been validated 
     member this.Request =
@@ -86,7 +86,6 @@ module Logic =
             | RequestToCancelTimeoffRefused _ -> true
             | Validated _ -> true
 
-// Function signature =>  val evolve : 'a -> event:RequestEvent -> RequestState
     let evolve _ event =
         match event with
         | RequestCreated request -> PendingValidation request
@@ -97,11 +96,9 @@ module Logic =
         | RequestRefused request -> Refused request
         | RequestValidated request -> Validated request
 
-// Function signature =>    val getRequestState : events:seq<RequestEvent> -> RequestState
     let getRequestState events =
         events |> Seq.fold evolve NotCreated
 
-// Function signature =>    val getAllRequests : events:seq<RequestEvent> -> Map<Guid,RequestState>
     let getAllRequests events =
         let folder requests (event: RequestEvent) =
             let state = defaultArg (Map.tryFind event.Request.RequestId requests) NotCreated
@@ -110,14 +107,9 @@ module Logic =
 
         events |> Seq.fold folder Map.empty
 
-// Function signature =>    val overlapWithAnyRequest : 
-//                                    previousRequests:seq<TimeOffRequest> -> request:'a -> bool
     let overlapWithAnyRequest (previousRequests: TimeOffRequest seq) request =
         false //TODO
 
-// Function signature =>    val createRequest :
-//                                    previousRequests:seq<TimeOffRequest> ->
-//                                          request:TimeOffRequest -> Result<RequestEvent list,string>
     let createRequest previousRequests request =
         if overlapWithAnyRequest previousRequests request then
             Error "Overlapping request"
@@ -126,7 +118,7 @@ module Logic =
         else
             Ok [RequestCreated request]
     
-    let refuseRequest previousRequests request =
+    let cancelRequest previousRequests request =
         if overlapWithAnyRequest previousRequests request then
             Error "Overlapping request"
         elif request.Start.Date <= DateTime.Today then
@@ -134,9 +126,6 @@ module Logic =
         else
             Ok [RequestRefused request]
 
-// Function signature =>    val requestCancellation :
-//                                    previousRequests:seq<TimeOffRequest> ->
-//                                          request:TimeOffRequest -> Result<RequestEvent list,string>
     let requestCancellation previousRequests request =
         if overlapWithAnyRequest previousRequests request then
             Error "Overlapping request"
@@ -145,8 +134,7 @@ module Logic =
         else
             Ok [RequestCancellation request]
 
-// Function signature =>    val validateRequest :
-//                                    requestState:RequestState -> Result<RequestEvent list,string>
+
     let validateRequest requestState =
         match requestState with
         | PendingValidation request ->
@@ -162,9 +150,7 @@ module Logic =
         | Validated request -> Ok [RequestRefused request]
         |  _ -> Error "Request cannot be cancelled"
 
-// Function signature =>    val handleCommand :
-//                                    store:IStore<UserId,RequestEvent> ->
-//                                          command:Command -> Result<RequestEvent list,string>
+
     let handleCommand (store: IStore<UserId, RequestEvent>) (command: Command) =
         let userId = command.UserId
         let stream = store.GetStream userId
@@ -199,7 +185,7 @@ module Logic =
                 |> Seq.map (fun (_, state) -> state)
                 |> Seq.map (fun state -> state.Request)
             
-            refuseRequest activeActiveOrNotRequests request
+            cancelRequest activeActiveOrNotRequests request
 
         | CancelRequest (_, requestId) -> 
             let requestState = defaultArg (userRequests.TryFind requestId) NotCreated
