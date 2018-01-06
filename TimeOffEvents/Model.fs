@@ -30,7 +30,12 @@ type Command =
     | RequestToCancelTimeoffRefused of UserId * Guid        // Refuse to cancel a timeoff       => Command made by manager
     | CancelRequest of UserId * Guid                        // Cancel a timeoff                 => Command made by employee
     | RefuseRequest of TimeOffRequest                       // Refuse a timeoff request         => Command made by manager 
-    | ValidateRequest of UserId * Guid with                 // Validate a timeoff request       => Command made by manager 
+    | ValidateRequest of UserId * Guid                      // Validate a timeoff request       => Command made by manager
+    | PrintValidatedRequest of UserId * Guid                // Print only all finished timeoffs of the year of an employee
+    | PrintActiveRequests of UserId * Guid                  // Print current request timeoffs of an employee
+    | PrintScheduledRequests of UserId * Guid               // Print future start date timeoff of an employee
+    | PrintBalance of UserId * Guid                         // Print the balance of an employee
+    with 
     member this.UserId =
         match this with
         | RequestTimeOff request -> request.UserId
@@ -40,6 +45,10 @@ type Command =
         | CancelRequest (userId, _) -> userId
         | RefuseRequest request -> request.UserId
         | ValidateRequest (userId, _) -> userId
+        | PrintValidatedRequest (userId, _) -> userId
+        | PrintActiveRequests (userId, _) -> userId
+        | PrintScheduledRequests (userId, _) -> userId
+        | PrintBalance (userId, _) -> userId
 
 type RequestEvent =
     | RequestCreated of TimeOffRequest                          // A timeoff request has been created
@@ -48,14 +57,25 @@ type RequestEvent =
     | RequestCancellationAccepted of TimeOffRequest             // A request to cancel a validated timeoff has been accepted
     | RequestCancelled of TimeOffRequest                        // A request has been cancelled
     | RequestRefused of TimeOffRequest                          // A timeoff request has been refuse
-    | RequestValidated of TimeOffRequest with                   // A timeoff request has been validated 
+    | RequestValidated of TimeOffRequest                        // A timeoff request has been validated
+    | PrintValidatedRequest of TimeOffRequest
+    | PrintActiveRequests of TimeOffRequest
+    | PrintScheduledRequests of TimeOffRequest
+    | PrintBalance of TimeOffRequest
+    with
     member this.Request =
         match this with
         | RequestCreated request -> request
         | RequestCancellation request -> request
         | RequestCancellationRefused request -> request
         | RequestCancellationAccepted request -> request
+        | RequestCancelled request -> request
+        | RequestRefused request -> request
         | RequestValidated request -> request
+        | PrintValidatedRequest request -> request
+        | PrintActiveRequests request -> request
+        | PrintScheduledRequests request -> request
+        | PrintBalance request -> request
 
 module Logic =
 
@@ -67,7 +87,12 @@ module Logic =
         | RequestToCancelTimeoffAccepted of TimeOffRequest
         | Cancelled of TimeOffRequest
         | Refused of TimeOffRequest
-        | Validated of TimeOffRequest with
+        | Validated of TimeOffRequest 
+        | PrintingValidatedRequest of TimeOffRequest
+        | PrintingActiveRequests of TimeOffRequest
+        | PrintingScheduledRequests of TimeOffRequest
+        | PrintingBalance of TimeOffRequest
+        with
         member this.Request =
             match this with
             | NotCreated -> invalidOp "Not created"
@@ -78,6 +103,10 @@ module Logic =
             | Cancelled request
             | Refused request
             | Validated request -> request
+            | PrintingValidatedRequest request -> request
+            | PrintingActiveRequests request -> request
+            | PrintingScheduledRequests request -> request
+            | PrintingBalance request -> request
         member this.IsActive =
             match this with
             | NotCreated _ -> false
