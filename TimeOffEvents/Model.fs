@@ -26,19 +26,19 @@ type TimeOffRequest = {
 type Command =
     | RequestTimeOff of TimeOffRequest                  // A timeoff request                => Command made by employee or manager
     | RequestToCancelTimeoff of TimeOffRequest          // Request to cancel a timeoff      => Command made by employee or manager
-    | RequestToCancelTimeoffAccepted of TimeOffRequest  // Accept to cancel a timeoff       => Command made by manager
-    | RequestToCancelTimeoffRefused of TimeOffRequest   // Refuse to cancel a timeoff       => Command made by manager
-    | CancelValidatedRequest of TimeOffRequest          // Cancel a validated timeoff       => Command made by employee
-    | RefuseRequest of UserId * Guid                    // Refuse a timeoff request         => Command made by manager 
+    | RequestToCancelTimeoffAccepted of UserId * Guid  // Accept to cancel a timeoff       => Command made by manager
+    | RequestToCancelTimeoffRefused of UserId * Guid   // Refuse to cancel a timeoff       => Command made by manager
+    | CancelValidatedRequest of UserId * Guid          // Cancel a validated timeoff       => Command made by employee
+    | RefuseRequest of TimeOffRequest                    // Refuse a timeoff request         => Command made by manager 
     | ValidateRequest of UserId * Guid with             // Validate a timeoff request       => Command made by manager 
     member this.UserId =
         match this with
         | RequestTimeOff request -> request.UserId
         | RequestToCancelTimeoff request -> request.UserId
-        | RequestToCancelTimeoffAccepted request -> request.UserId
-        | RequestToCancelTimeoffRefused request -> request.UserId
-        | CancelValidatedRequest request -> request.UserId
-        | RefuseRequest (userId, _) -> userId
+        | RequestToCancelTimeoffAccepted (userId, _) -> userId
+        | RequestToCancelTimeoffRefused (userId, _) -> userId
+        | CancelValidatedRequest (userId, _) -> userId
+        | RefuseRequest request -> request.UserId
         | ValidateRequest (userId, _) -> userId
 
 type RequestEvent =
@@ -161,6 +161,7 @@ module Logic =
         | RequestToCancelTimeoffRefused request -> Ok [RequestRefused request]
         | Validated request -> Ok [RequestRefused request]
         |  _ -> Error "Request cannot be cancelled"
+
 // Function signature =>    val handleCommand :
 //                                    store:IStore<UserId,RequestEvent> ->
 //                                          command:Command -> Result<RequestEvent list,string>
@@ -181,6 +182,29 @@ module Logic =
 
             createRequest activeRequests request
 
+         | RequestToCancelTimeoff request -> 
+            let activeRequests =
+                userRequests
+                |> Map.toSeq
+                |> Seq.map (fun (_, state) -> state)
+                |> Seq.where (fun state -> state.IsActive)
+                |> Seq.map (fun state -> state.Request)
+                
+            requestCancellation activeRequests request   
+
+        | RefuseRequest request -> 
+            let activeActiveOrNotRequests =
+                userRequests
+                |> Map.toSeq
+                |> Seq.map (fun (_, state) -> state)
+                |> Seq.map (fun state -> state.Request)
+            
+            refuseRequest activeActiveOrNotRequests request
+
+        | CancelValidatedRequest (_, requestId) -> 
+            let requestState = defaultArg (userRequests.TryFind requestId) NotCreated
+            cancelActiveRequests requestState
+            
         | ValidateRequest (_, requestId) ->
             let requestState = defaultArg (userRequests.TryFind requestId) NotCreated
             validateRequest requestState
