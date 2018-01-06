@@ -24,64 +24,78 @@ type TimeOffRequest = {
 }
 
 type Command =
-    | RequestTimeOff of TimeOffRequest
-    | RequestCancelled of TimeOffRequest
-    | RequestCancelledAccepted of TimeOffRequest
-    | ValidateRequest of UserId * Guid with
+    | RequestTimeOff of TimeOffRequest                  // A timeoff request                => Command made by employee or manager
+    | RequestToCancelTimeoff of TimeOffRequest          // Request to cancel a timeoff      => Command made by employee or manager
+    | RequestToCancelTimeoffAccepted of TimeOffRequest  // Accept to cancel a timeoff       => Command made by manager
+    | RequestToCancelTimeoffRefused of TimeOffRequest   // Refuse to cancel a timeoff       => Command made by manager
+    | CancelValidatedRequest of TimeOffRequest          // Cancel a validated timeoff       => Command made by employee
+    | RefuseRequest of UserId * Guid                    // Refuse a timeoff request         => Command made by manager 
+    | ValidateRequest of UserId * Guid with             // Validate a timeoff request       => Command made by manager 
     member this.UserId =
         match this with
         | RequestTimeOff request -> request.UserId
-        | RequestCancelled request -> request.UserId
+        | RequestToCancelTimeoff request -> request.UserId
+        | RequestToCancelTimeoffAccepted request -> request.UserId
+        | RequestToCancelTimeoffRefused request -> request.UserId
+        | CancelValidatedRequest request -> request.UserId
+        | RefuseRequest (userId, _) -> userId
         | ValidateRequest (userId, _) -> userId
 
 type RequestEvent =
-    | RequestCreated of TimeOffRequest
-    | RequestCancellation of TimeOffRequest
-    | RequestCancelledRefused of TimeOffRequest
-    | RequestCancelledAccepted of TimeOffRequest
-    | RequestValidated of TimeOffRequest with
+    | RequestCreated of TimeOffRequest                          // A timeoff request has been created
+    | RequestCancellation of TimeOffRequest                     // A request to cancel a validated timeoff has been made
+    | RequestCancellationRefused of TimeOffRequest              // A request to cancel a validated timeoff has been refused
+    | RequestCancellationAccepted of TimeOffRequest             // A request to cancel a validated timeoff has been accepted
+    | ValidatedRequestCancelled of TimeOffRequest                // A validated request has been cancelled
+    | RequestRefused of TimeOffRequest                          // A timeoff request has been refuse
+    | RequestValidated of TimeOffRequest with                   // A timeoff request has been validated 
     member this.Request =
         match this with
         | RequestCreated request -> request
         | RequestCancellation request -> request
-        | RequestCancelledRefused request -> request
-        | RequestCancelledAccepted request -> request
+        | RequestCancellationRefused request -> request
+        | RequestCancellationAccepted request -> request
         | RequestValidated request -> request
 
 module Logic =
 
     type RequestState =
-        | NotCreated
-        | PendingValidation of TimeOffRequest
+        | NotCreated                                                // No request -> initial state
+        | PendingValidation of TimeOffRequest                       
+        | ToCancelTimeoffRequested of TimeOffRequest                  
+        | RequestToCancelTimeoffRefused of TimeOffRequest
+        | RequestToCancelTimeoffAccepted of TimeOffRequest
         | RequestCancelled of TimeOffRequest
-        | CancelRefused of TimeOffRequest
-        | CancelledByEmployee of TimeOffRequest
-        | CancelledByManager of TimeOffRequest
         | Refused of TimeOffRequest
         | Validated of TimeOffRequest with
         member this.Request =
             match this with
             | NotCreated -> invalidOp "Not created"
             | PendingValidation request
+            | ToCancelTimeoffRequested request
+            | RequestToCancelTimeoffRefused request
+            | RequestToCancelTimeoffAccepted request
             | RequestCancelled request
-            | CancelRefused request
-            | CancelledByEmployee request
-            | CancelledByManager request
             | Refused request
             | Validated request -> request
         member this.IsActive =
             match this with
             | NotCreated -> false
             | PendingValidation _ -> true
-            | RequestCancelled _ -> true
-            | CancelRefused _ -> true
+            | ToCancelTimeoffRequested _ -> true
+            | RequestToCancelTimeoffRefused _ -> true
             | Validated _ -> true
 
     let evolve _ event =
         match event with
         | RequestCreated request -> PendingValidation request
+        | RequestCancellation request -> ToCancelTimeoffRequested request
+        | RequestCancellationRefused request -> RequestToCancelTimeoffRefused request
+        | RequestCancellationAccepted request -> RequestToCancelTimeoffAccepted request
+        | ValidatedRequestCancelled request -> RequestCancelled request
+        | RequestRefused request -> Refused request
         | RequestValidated request -> Validated request
-        | RequestCancellation request -> RequestCancelled request
+
 
     let getRequestState events =
         events |> Seq.fold evolve NotCreated
