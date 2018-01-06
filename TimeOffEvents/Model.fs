@@ -24,20 +24,20 @@ type TimeOffRequest = {
 }
 
 type Command =
-    | RequestTimeOff of TimeOffRequest                  // A timeoff request                => Command made by employee or manager
-    | RequestToCancelTimeoff of TimeOffRequest          // Request to cancel a timeoff      => Command made by employee or manager
-    | RequestToCancelTimeoffAccepted of UserId * Guid  // Accept to cancel a timeoff       => Command made by manager
-    | RequestToCancelTimeoffRefused of UserId * Guid   // Refuse to cancel a timeoff       => Command made by manager
-    | CancelValidatedRequest of UserId * Guid          // Cancel a validated timeoff       => Command made by employee
-    | RefuseRequest of TimeOffRequest                    // Refuse a timeoff request         => Command made by manager 
-    | ValidateRequest of UserId * Guid with             // Validate a timeoff request       => Command made by manager 
+    | RequestTimeOff of TimeOffRequest                      // A timeoff request                => Command made by employee or manager
+    | RequestToCancelTimeoff of TimeOffRequest              // Request to cancel a timeoff      => Command made by employee or manager
+    | CancelTimeoffAccepted of UserId * Guid                // Accept to cancel a timeoff       => Command made by manager
+    | RequestToCancelTimeoffRefused of UserId * Guid        // Refuse to cancel a timeoff       => Command made by manager
+    | CancelRequest of UserId * Guid                        // Cancel a timeoff                 => Command made by employee
+    | RefuseRequest of TimeOffRequest                       // Refuse a timeoff request         => Command made by manager 
+    | ValidateRequest of UserId * Guid with                 // Validate a timeoff request       => Command made by manager 
     member this.UserId =
         match this with
         | RequestTimeOff request -> request.UserId
         | RequestToCancelTimeoff request -> request.UserId
-        | RequestToCancelTimeoffAccepted (userId, _) -> userId
+        | CancelTimeoffAccepted (userId, _) -> userId
         | RequestToCancelTimeoffRefused (userId, _) -> userId
-        | CancelValidatedRequest (userId, _) -> userId
+        | CancelRequest (userId, _) -> userId
         | RefuseRequest request -> request.UserId
         | ValidateRequest (userId, _) -> userId
 
@@ -46,7 +46,7 @@ type RequestEvent =
     | RequestCancellation of TimeOffRequest                     // A request to cancel a validated timeoff has been made
     | RequestCancellationRefused of TimeOffRequest              // A request to cancel a validated timeoff has been refused
     | RequestCancellationAccepted of TimeOffRequest             // A request to cancel a validated timeoff has been accepted
-    | ValidatedRequestCancelled of TimeOffRequest                // A validated request has been cancelled
+    | RequestCancelled of TimeOffRequest                // A validated request has been cancelled
     | RequestRefused of TimeOffRequest                          // A timeoff request has been refuse
     | RequestValidated of TimeOffRequest with                   // A timeoff request has been validated 
     member this.Request =
@@ -65,7 +65,7 @@ module Logic =
         | ToCancelTimeoffRequested of TimeOffRequest                  
         | RequestToCancelTimeoffRefused of TimeOffRequest
         | RequestToCancelTimeoffAccepted of TimeOffRequest
-        | RequestCancelled of TimeOffRequest
+        | Cancelled of TimeOffRequest
         | Refused of TimeOffRequest
         | Validated of TimeOffRequest with
         member this.Request =
@@ -75,7 +75,7 @@ module Logic =
             | ToCancelTimeoffRequested request
             | RequestToCancelTimeoffRefused request
             | RequestToCancelTimeoffAccepted request
-            | RequestCancelled request
+            | Cancelled request
             | Refused request
             | Validated request -> request
         member this.IsActive =
@@ -93,7 +93,7 @@ module Logic =
         | RequestCancellation request -> ToCancelTimeoffRequested request
         | RequestCancellationRefused request -> RequestToCancelTimeoffRefused request
         | RequestCancellationAccepted request -> RequestToCancelTimeoffAccepted request
-        | ValidatedRequestCancelled request -> RequestCancelled request
+        | RequestCancelled request -> Cancelled request
         | RequestRefused request -> Refused request
         | RequestValidated request -> Validated request
 
@@ -121,11 +121,11 @@ module Logic =
     let createRequest previousRequests request =
         if overlapWithAnyRequest previousRequests request then
             Error "Overlapping request"
-        elif request.Start.Date <= DateTime.Today then
+        elif request.Start.Date < DateTime.Today then
             Error "The request starts in the past"
         else
             Ok [RequestCreated request]
-
+    
     let refuseRequest previousRequests request =
         if overlapWithAnyRequest previousRequests request then
             Error "Overlapping request"
@@ -201,7 +201,7 @@ module Logic =
             
             refuseRequest activeActiveOrNotRequests request
 
-        | CancelValidatedRequest (_, requestId) -> 
+        | CancelRequest (_, requestId) -> 
             let requestState = defaultArg (userRequests.TryFind requestId) NotCreated
             cancelActiveRequests requestState
             
